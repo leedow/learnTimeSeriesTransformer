@@ -46,6 +46,12 @@ logger = logging.get_logger(__name__)
 _CONFIG_FOR_DOC = "TimeSeriesTransformerConfig"
 
 
+"""
+类的作用：
+    这个类的作用是将时间序列特征转换为嵌入向量（目前我还无法深刻理解嵌入向量的作用，以后补充）
+继承：
+    nn.Module是 PyTorch 的一个核心类，它是所有神经网络模块的基类， 提供了一种简洁的方式来定义网络的结构、管理参数以及在训练和推理过程中方便地进行计算。
+"""
 class TimeSeriesFeatureEmbedder(nn.Module):
     """
     Embed a sequence of categorical features.
@@ -63,6 +69,10 @@ class TimeSeriesFeatureEmbedder(nn.Module):
         self.num_features = len(cardinalities)
         self.embedders = nn.ModuleList([nn.Embedding(c, d) for c, d in zip(cardinalities, embedding_dims)])
 
+    """
+    方法功能：
+        定义向前传播逻辑（待补充）
+    """
     def forward(self, features: torch.Tensor) -> torch.Tensor:
         if self.num_features > 1:
             # we slice the last dimension, giving an array of length
@@ -79,7 +89,10 @@ class TimeSeriesFeatureEmbedder(nn.Module):
             dim=-1,
         )
 
-
+"""
+类的作用：
+    数据标准化
+"""
 class TimeSeriesStdScaler(nn.Module):
     """
     Standardize features by calculating the mean and scaling along the first dimension, and then normalizes it by
@@ -114,7 +127,10 @@ class TimeSeriesStdScaler(nn.Module):
         scale = torch.sqrt(variance + self.minimum_scale)
         return (data - loc) / scale, loc, scale
 
-
+"""
+类的作用：
+    数据标准化
+"""
 class TimeSeriesMeanScaler(nn.Module):
     """
     Computes a scaling factor as the weighted average absolute value along the first dimension, and scales the data
@@ -168,7 +184,10 @@ class TimeSeriesMeanScaler(nn.Module):
 
         return scaled_data, torch.zeros_like(scale), scale
 
-
+"""
+类的作用：
+    数据标准化
+"""
 class TimeSeriesNOPScaler(nn.Module):
     """
     Assigns a scaling factor equal to 1 along the first dimension, and therefore applies no scaling to the input data.
@@ -195,14 +214,20 @@ class TimeSeriesNOPScaler(nn.Module):
         loc = torch.zeros_like(data, requires_grad=False).mean(dim=self.dim, keepdim=self.keepdim)
         return data, loc, scale
 
-
+"""
+方法的作用：
+    nll损失函数
+"""
 def nll(input: torch.distributions.Distribution, target: torch.Tensor) -> torch.Tensor:
     """
     Computes the negative log likelihood loss from input distribution with respect to target.
     """
     return -input.log_prob(target)
 
-
+"""
+方法的作用：
+    和损失计算相关的功能
+"""
 def weighted_average(input_tensor: torch.Tensor, weights: Optional[torch.Tensor] = None, dim=None) -> torch.Tensor:
     """
     Computes the weighted average of a given tensor across a given `dim`, masking values associated with weight zero,
