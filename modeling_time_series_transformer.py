@@ -1262,6 +1262,9 @@ class TimeSeriesTransformerModel(TimeSeriesTransformerPreTrainedModel):
             lagged_values.append(sequence[:, begin_index:end_index, ...])
         return torch.stack(lagged_values, dim=-1)
 
+    '''
+    预处理模型输入数据
+    '''
     def create_network_inputs(
         self,
         past_values: torch.Tensor,
@@ -1273,9 +1276,42 @@ class TimeSeriesTransformerModel(TimeSeriesTransformerPreTrainedModel):
         future_time_features: Optional[torch.Tensor] = None,
     ):
         # time feature
+        '''
+
+        '''
         time_feat = (
+            '''
+            torch.cat的作用是将一组张量拼接到一起，第二个参数制定了拼接维度
+            比如past_time_features的形状为(batch_size, context_length, feature_size)
+            future_time_features的形状为(batch_size, future_length, feature_size)
+            torch.cat((past_time_features, future_time_features的形状为),1)后的tensor形状为(batch_size, context_length+future_length, feature_size)
+            '''
             torch.cat(
                 (
+                    '''
+                    tensor的切片语法:
+                        一维的举例：                    
+                            tensordata[start:stop:step]，表示从索引start开始,到stop(不包括)结束，以step为步长切片
+                            如果stop省略则默认到结束，如果step省略则默认为1
+                        二维的举例：
+                            tensordata[start:stop:step , start:stop:step]，这里用,表示对不同维度进行切片
+                        多维的举例：
+                            tensordata[start:stop:step , start:stop:step, ]，不同维度用,隔开
+                            tensordata[start:stop:step , start:stop:step, ...]，不同维度用,隔开,这里...指剩余维度数据全部保留
+                            tensordata[: , start:stop:step, ...] 第一个:表示保留该维度所有数据
+                    下面past_time_features切片的解释：
+                        第一维度的规则
+                            :保留第一维度所有数据，这里是指batch_size维度的数据
+                        第二维度的规则
+                            self._past_length = self.config.context_length + max(self.config.lags_sequence) （上面代码有定义）
+                            self._past_length - self.config.context_length等于max(self.config.lags_sequence)
+                            切片第二维度索引max(self.config.lags_sequence)到最后的数据，步长取1
+                        剩余维度规则：
+                            保留所有剩余维度数据
+                        比如输入的past_time_features形状为(batch_size,input_size,feature_size)
+                        切片后的数据形状为(batch_size,context_length,feature_size)
+                        相当于把原始输入数据的lags部分的数据进行了删除，只保留了后面context_length部分
+                    '''
                     past_time_features[:, self._past_length - self.config.context_length :, ...],
                     future_time_features,
                 ),
