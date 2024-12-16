@@ -1230,6 +1230,10 @@ class TimeSeriesTransformerModel(TimeSeriesTransformerPreTrainedModel):
     def _past_length(self) -> int:
         return self.config.context_length + max(self.config.lags_sequence)
 
+    '''
+    和滞后项相关的处理
+    【待补充】
+    '''
     def get_lagged_subsequences(
         self, sequence: torch.Tensor, subsequences_length: int, shift: int = 0
     ) -> torch.Tensor:
@@ -1262,9 +1266,9 @@ class TimeSeriesTransformerModel(TimeSeriesTransformerPreTrainedModel):
             lagged_values.append(sequence[:, begin_index:end_index, ...])
         return torch.stack(lagged_values, dim=-1)
 
-    '''
+    """
     预处理模型输入数据
-    '''
+    """
     def create_network_inputs(
         self,
         past_values: torch.Tensor,
@@ -1276,19 +1280,21 @@ class TimeSeriesTransformerModel(TimeSeriesTransformerPreTrainedModel):
         future_time_features: Optional[torch.Tensor] = None,
     ):
         # time feature
-        '''
-
-        '''
+        """
+        时间特征的处理
+        如果future_values有定义，则将past_time_features和future_time_features拼接到一起
+        否则只对past_time_features进行切片，具体切片语法看下面注释(在预测时不需要传入future_values)
+        """
         time_feat = (
-            '''
+            """
             torch.cat的作用是将一组张量拼接到一起，第二个参数制定了拼接维度
             比如past_time_features的形状为(batch_size, context_length, feature_size)
             future_time_features的形状为(batch_size, future_length, feature_size)
             torch.cat((past_time_features, future_time_features的形状为),1)后的tensor形状为(batch_size, context_length+future_length, feature_size)
-            '''
+            """
             torch.cat(
                 (
-                    '''
+                    """
                     tensor的切片语法:
                         一维的举例：                    
                             tensordata[start:stop:step]，表示从索引start开始,到stop(不包括)结束，以step为步长切片
@@ -1311,7 +1317,7 @@ class TimeSeriesTransformerModel(TimeSeriesTransformerPreTrainedModel):
                         比如输入的past_time_features形状为(batch_size,input_size,feature_size)
                         切片后的数据形状为(batch_size,context_length,feature_size)
                         相当于把原始输入数据的lags部分的数据进行了删除，只保留了后面context_length部分
-                    '''
+                    """
                     past_time_features[:, self._past_length - self.config.context_length :, ...],
                     future_time_features,
                 ),
@@ -1322,13 +1328,18 @@ class TimeSeriesTransformerModel(TimeSeriesTransformerPreTrainedModel):
         )
 
         # target
+        # 如果past_observed_mask没有定义，则生成一个默认的全部为1的past_observed_mask，即所有的输入值用于学习
+        # past_observed_mask的作用是用于控制输入特征是否生效，比如[1,0,1]表示在第二个特征在学习时忽略（用于处理现实数据可能存在缺失异常的情况）
         if past_observed_mask is None:
             past_observed_mask = torch.ones_like(past_values)
 
-        context = past_values[:, -self.config.context_length :]
-        observed_context = past_observed_mask[:, -self.config.context_length :]
-        _, loc, scale = self.scaler(context, observed_context)
+        context = past_values[:, -self.config.context_length :] # context取输入batch样本的后context_length长度数据
+        observed_context = past_observed_mask[:, -self.config.context_length :] # 生成和batch相对应形状的observed_mask张量
+        _, loc, scale = self.scaler(context, observed_context) # 获取数据缩放参数
 
+
+        # 如果future_values不为空，同时缩放past_values和future_values
+        # 否则只缩放past_values
         inputs = (
             (torch.cat((past_values, future_values), dim=1) - loc) / scale
             if future_values is not None
@@ -1336,6 +1347,7 @@ class TimeSeriesTransformerModel(TimeSeriesTransformerPreTrainedModel):
         )
 
         # static features
+        # 静态特征的处理部分，先跳过 【待补充】
         log_abs_loc = loc.abs().log1p() if self.config.input_size == 1 else loc.squeeze(1).abs().log1p()
         log_scale = scale.log() if self.config.input_size == 1 else scale.squeeze(1).log()
         static_feat = torch.cat((log_abs_loc, log_scale), dim=1)
@@ -1348,9 +1360,11 @@ class TimeSeriesTransformerModel(TimeSeriesTransformerPreTrainedModel):
         expanded_static_feat = static_feat.unsqueeze(1).expand(-1, time_feat.shape[1], -1)
 
         # all features
+        # 
         features = torch.cat((expanded_static_feat, time_feat), dim=-1)
 
         # lagged features
+        # 如果输入了future_values则要滞后项上加上prediction_length长度
         subsequences_length = (
             self.config.context_length + self.config.prediction_length
             if future_values is not None
@@ -1360,6 +1374,7 @@ class TimeSeriesTransformerModel(TimeSeriesTransformerPreTrainedModel):
         lags_shape = lagged_sequence.shape
         reshaped_lagged_sequence = lagged_sequence.reshape(lags_shape[0], lags_shape[1], -1)
 
+        # 判断数据格式是否符合lag设置的要求
         if reshaped_lagged_sequence.shape[1] != time_feat.shape[1]:
             raise ValueError(
                 f"input length {reshaped_lagged_sequence.shape[1]} and time feature lengths {time_feat.shape[1]} does not match"
@@ -1429,6 +1444,8 @@ class TimeSeriesTransformerModel(TimeSeriesTransformerPreTrainedModel):
 
         >>> last_hidden_state = outputs.last_hidden_state
         ```"""
+
+        # 非必填项目【待补充】
         output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
         output_hidden_states = (
             output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
@@ -1436,6 +1453,7 @@ class TimeSeriesTransformerModel(TimeSeriesTransformerPreTrainedModel):
         use_cache = use_cache if use_cache is not None else self.config.use_cache
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
+        # 获取网络的处理后的输入数据
         transformer_inputs, loc, scale, static_feat = self.create_network_inputs(
             past_values=past_values,
             past_time_features=past_time_features,
@@ -1446,6 +1464,7 @@ class TimeSeriesTransformerModel(TimeSeriesTransformerPreTrainedModel):
             future_time_features=future_time_features,
         )
 
+        # 生成encoder_outputs,默认传入encoder_outputs的情况【待补充】
         if encoder_outputs is None:
             enc_input = transformer_inputs[:, : self.config.context_length, ...]
             encoder_outputs = self.encoder(
