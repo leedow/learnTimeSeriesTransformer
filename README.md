@@ -19,4 +19,17 @@ https://github.com/huggingface/transformers/blob/main/src/transformers/models/ti
 
 ![类依赖关系图](classes.png)
 
+## 推荐参考资料
 
+目前最推荐的机器学习教程博主，内容生动有趣而且精简
+https://www.youtube.com/@statquest
+
+Attention Is All You Need (Transformer) 论文精读：这里的self attention的解释是我看过的最容易理解的
+https://zhuanlan.zhihu.com/p/569527564
+
+可能是油管上最佳的中文机器学习播主
+https://www.youtube.com/watch?v=hYdO9CscNes
+
+
+Transformer手把手代码实战教程（英文），基于pytorch
+https://www.youtube.com/watch?v=U0s0f995w14&t=1348s
