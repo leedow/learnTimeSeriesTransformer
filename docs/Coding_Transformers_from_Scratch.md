@@ -191,21 +191,31 @@ class PositionEncoding(nn.Module):
 
         ## Here is where we start doing the math to determine the y-axis coordinates on the
         ## sine and cosine curves.
+
+        ## 开始使用sine和cosine曲线确定y值
         ##
         ## The positional encoding equations used in "Attention is all you need" are...
+
+        ## 位置编码公式如下：
         ##
         ## PE(pos, 2i)   = sin(pos / 10000^(2i/d_model))
         ## PE(pos, 2i+1) = cos(pos / 10000^(2i/d_model))
         ##
         ## ...and we see, within the sin() and cos() functions, we divide "pos" by some number that depends
         ## on the index (i) and total number of PE values we want per token (d_model). 
+
+        ## 我们看到，通过sin,cos函数，我们根据索引i以及期望的的d_model值划分了一些数字
         ##
         ## NOTE: When the index, i, is 0 then we are calculating the y-axis coordinates on the **first pair** 
         ##       of sine and cosine curves. When i=1, then we are calculating the y-axis coordiantes on the 
         ##       **second pair** of sine and cosine curves. etc. etc.
+
+        ## 注意：索引i为0时，我们计算对应sin,cose的Y值，i等于1时，再次计算sin,cos的y值
         ##
         ## Now, pretty much everyone calculates the term we use to divide "pos" by first, and they do it with
         ## code that looks like this...
+
+        ## 现在，
         ##
         ## div_term = torch.exp(torch.arange(start=0, end=d_model, step=2).float() * -(math.log(10000.0) / d_model))
         ##
@@ -323,4 +333,145 @@ class PositionEncoding(nn.Module):
                                                                       ## NOTE: That second ':' is optional and 
                                                                       ## we could re-write it like this: 
                                                                       ## self.pe[:word_embeddings.size(0)]
+```
+
+
+First, the general equations for the different types of attention are almost identical as seen in the figure below. In the equations, Q is for the Query matrix, K is for the Key matrix and V is for the Value matrix. On the left, we have the equation for Self-Attention and Encoder-Decoder Attention. The differences in these types of attention are not from the equation we use, but from how the Q, K, and V matrices are computed. On the right, we see the equation for Masked Self-Attention and the only difference it has from the equation on the left is the addition of a Mask matrix, M, that prevents words that come after a specific Query from being included in the final attention scores.
+Equations for computing attention
+
+一般来说，不同类型注意力的公式几乎相同，如下图所示。在公式中，Q表示查询矩阵（Query matrix），K表示键矩阵（Key matrix），V 表示值矩阵（Value matrix）。左侧显示的是自注意力（Self-Attention）和编码器-解码器注意力（Encoder-Decoder Attention）的公式。这些注意力类型的区别并不在于使用的公式，而在于如何计算 Q、K 和 V 矩阵。
+
+右侧显示的是掩码自注意力（Masked Self-Attention）的公式，它与左侧的唯一区别在于增加了一个掩码矩阵 MM。这个掩码矩阵的作用是阻止特定查询之后的单词被包含在最终的注意力分数中。
+
+
+NOTE: Since both equations are very similar, we'll go through one example and point out the key differences when we get to them.
+
+注意：因为这些公式十分相似，我们将通过一个例子进行讲解，并在涉及到关键区别时加以说明。
+
+
+
+First, given word embedding values for each word/token in the input phrase <SOS> let's go in matrix form, we multiply them by matrices of weights to create Queries, Keys, and Values
+
+首先，给定输入短语中每个单词/标记的词嵌入值（如 <SOS>），将其以矩阵形式表示，我们将它们与权重矩阵相乘，以生成查询 (Queries)、键 (Keys) 和值 (Values)。
+
+
+We then multiply the Queries by the transpose of the Keys so that the query for each word calculates a similarity value with the keys for all of the words. NOTE: As seen in the illustration below, Masked Self-Attention calculates the values for all Query/Key pairs, but, ultimately, ignores values for when a token's Query comes before other token's Keys. For example, if the Query is for the first token <SOS>, then Masked Self-Attention will ignore the values calculated with Keys for Let's and go because those tokens come after <SOS>. 
+
+
+接着，我们将查询 (Queries) 矩阵与键 (Keys) 矩阵的转置相乘，这样每个单词的查询都会计算出与所有单词的键的相似值。注意：如下面的图示所示，掩码自注意力 (Masked Self-Attention) 会计算所有查询/键对的值，但最终会忽略某些情况下的值。例如，如果查询是针对第一个标记 <SOS>，那么掩码自注意力会忽略与 "Let's" 和 "go" 的键计算出的值，因为这些标记位于 <SOS> 之后。
+
+
+
+The next step is to scale the similarity scores by the square root of the number of columns in the Key matrix, which represents the number of values used to represent each token. In this case, we scale by the square root of 2
+
+
+下一步是将相似度分数按照键 (Key) 矩阵列数的平方根进行缩放，这个列数表示用于表示每个标记的值的数量。在这个例子中，我们将相似度分数除以根号2
+
+
+Now, if we were doing Masked Self-Attention, we would mask out the values we want to ignore by adding -infinity to them, as seen below. This step is the only difference between Self-Attention and Masked Self-Attention. 
+
+现在，如果我们在进行 Masked Self-Attention（掩蔽自注意力） 操作，我们会通过将负无穷大（-∞）添加到我们想忽略的值上来屏蔽它们，如下图所示。这一步是 Self-Attention（自注意力） 和 Masked Self-Attention 之间的唯一区别。
+
+
+
+
+
+
+```
+class Attention(nn.Module): 
+    
+    def __init__(self, d_model=2):
+        ## d_model = embedding 的数量
+        ##           In the transformer I used in the StatQuest: Transformer Neural Networks Clearly Explained!!!
+        ##           d_model=2, so that's what we'll use as a default for now.
+        ##           However, in "Attention Is All You Need" d_model=512
+
+        
+        super().__init__()
+        
+        self.d_model=d_model
+        
+        ## Initialize the Weights (W) that we'll use to create the
+        ## query (q), key (k) and value (v) numbers for each token
+
+        ## 初始化权重W，我们将使用w去为每个token创建q,k,V
+
+        ## NOTE: Most implementations that I looked at include the bias terms
+        ##       but I didn't use them in my video (since they are not in the 
+        ##       original Attention is All You Need paper).
+
+
+        ## 注意：大多数实现中我看到都包括了偏置项（bias terms），但我在我的视频中没有使用它们（因为它们并未出现在原始的《Attention is All You Need》论文中）。
+
+        self.W_q = nn.Linear(in_features=d_model, out_features=d_model, bias=False)
+        self.W_k = nn.Linear(in_features=d_model, out_features=d_model, bias=False)
+        self.W_v = nn.Linear(in_features=d_model, out_features=d_model, bias=False)
+        
+        ## NOTE: In this simple example, we are not training on the data in "batches"
+        ##       However, by defining variables for row_dim and col_dim, we could
+        ##       allow for batches by setting row_dim to 1 and col_com to 2.
+
+        ## 在这个简单的示例中，我们并未以“批次”（batches）的方式对数据进行训练。
+然而，通过定义用于行维度（row_dim）和列维度（col_dim）的变量，我们可以通过将row_dim设置为1和col_dim设置为2来实现批量处理的功能。
+        self.row_dim = 0
+        self.col_dim = 1
+
+        
+    def forward(self, encodings_for_q, encodings_for_k, encodings_for_v, mask=None):
+        ## Create the query, key and values using the encodings
+        ## associated with each token (token encodings)
+        ##
+        ## NOTE: For Encoder-Decoder Attention, the encodings for q come from
+        ##       the decoder and the encodings for k and v come from the output
+        ##       from the encoder.
+        ##       In all of the other types of attention, the encodings all
+        ##       come from the same source.
+        q = self.W_q(encodings_for_q)
+        k = self.W_k(encodings_for_k)
+        v = self.W_v(encodings_for_v)
+
+        ## Compute attention scores
+        ## the equation is (q * k^T)/sqrt(d_model)
+        ## NOTE: It seems most people use "reverse indexing" for the dimensions when transposing k
+        ##       k.transpose(dim0, dim1) will transpose k by swapping dim0 and dim1
+        ##       In standard matrix notation, we would want to swap rows (dim=0) with columns (dim=1)
+        ##       If we have 3 dimensions, because of batching, and the batch was the first dimension
+        ##       And thus dims are defined batch = 0, rows = 1, columns = 2
+        ##       then dim0=-2 = 3 - 2 = 1. dim1=-1 = 3 - 1 = 2.
+        ##       Alternatively, we could put the batches in dim 3, and thus, dim 0 would still be rows
+        ##       and dim 1 would still be columns. I'm not sure why batches are put in dim 0...
+        ##
+        ##       Likewise, the q.size(-1) uses negative indexing to rever to the number of columns in the query
+        ##       which tells us d_model. Alternatively, we could ust q.size(2) if we have batches in the first
+        ##       dimension or q.size(1) if we have batches in the 3rd dimension.
+        ##
+        ##       Since there are a bunch of ways to index things, I think the best thing to do is use
+        ##       variables "row_dim" and "col_dim" instead of numbers...
+        sims = torch.matmul(q, k.transpose(dim0=self.row_dim, dim1=self.col_dim))
+
+        scaled_sims = sims / torch.tensor(k.size(self.col_dim)**0.5)
+
+        if mask is not None:
+            ## Here we are masking out things we don't want to pay attention to,
+            ## like tokens that come after the current token.
+            ## We can also use masking to block out the <PAD> token,
+            ## which is used when we have a batch of inputs sequences
+            ## and they are not all the exact same length. Because the batch is passed
+            ## in as a matrix, each input sequence has to have the same length, so we
+            ## add <PAD> to the shorter sequences so that they are all as long ast the
+            ## longest sequence.
+            ##
+            ## We replace <PAD>, or tokens that come after the current token
+            ## with a very large negative number so that the SoftMax() function
+            ## will give all masked elements an output value (or "probability") of 0.
+            scaled_sims = scaled_sims.masked_fill(mask=mask, value=-1e9) # I've also seen -1e20 and -9e15 used in masking
+        
+        ## Apply softmax to determine what percent of each token's value to
+        ## use in the final attention values.
+        attention_percents = F.softmax(scaled_sims, dim=self.col_dim)
+
+        ## Scale the values by their associated percentages and add them up.
+        attention_scores = torch.matmul(attention_percents, v)
+        
+        return attention_scores
 ```
