@@ -113,3 +113,6 @@ if __name__ == "__main__":
     # 前向传播
     output = model(src)
     print("输出形状:", output.shape)  # (batch_size, seq_len, vocab_size)
+
+
+

@@ -123,204 +123,178 @@ dataloader = DataLoader(dataset)
 class PositionEncoding(nn.Module):
     
     def __init__(self, d_model=2, max_len=6):
-        ## d_model = 定义了transformer的维度，即代表了每一个输入token的词嵌入维度 
-        ## max_len = 允许的输入的token最大长度。因为我们会预先计算好位置编码信息并且将他们保存到表格。我们可以使用d_model和max_len定义这个表格的行列的数量。在这个简单的例子中我们只使用简短的词汇，所以我们设置max_len=6作为默认设置。但是在The Annotated Transformer中这个值为5000。
+        ## d_model = Transformer的维度，也就是每个token的嵌入值数量。
+        ##           在我使用的StatQuest中的Transformer中，d_model=2，因此我们暂时使用这个作为默认值。
+        ##           然而，在《Attention Is All You Need》中的d_model=512。
+        ## max_len = 允许作为输入的最大token数量。
+        ##           由于我们预计算了位置编码值并将它们存储在查找表中，
+        ##           我们可以使用d_model和max_len来确定查找表中的行和列数。
+        ##
+        ##           在这个简单的示例中，我们只使用了短语，所以我们将max_len=6作为默认设置。
+        ##           然而，在《The Annotated Transformer》中，他们将max_len的默认值设置为5000。
         
         super().__init__()
-        ## We call the super's init because by creating our own __init__() method, we overwrite the one
-        ## we inherited from nn.Module. So we have to explicity call nn.Module's __init__(), otherwise it
-        ## won't get initialized. NOTE: If we didn't write our own __init__(), then we would not have
-        ## to call super().__init__(). Alternatively, if we didn't want to access any of nn.Module's methods, 
-        ## we wouldn't have to call it then either.
+        ## 我们调用super的init方法，因为我们自己定义了__init__()方法，覆盖了从nn.Module继承的__init__()方法。
+        ## 所以我们必须显式地调用nn.Module的__init__()，否则它不会被初始化。
+        ## 注意：如果我们没有写自己的__init__()，那么就不需要调用super().__init__()。
+        ## 另外，如果我们不打算访问nn.Module的任何方法，那么也不需要调用它。
 
-
-        ## Now we create a lookup table, pe, of position encoding values and initialize all of them to 0.
-        ## To do this, we will make a matrix of 0s that has max_len rows and d_model columns.
-        ## for example...
+        ## 现在我们创建一个位置编码值的查找表pe，并将所有值初始化为0。
+        ## 为此，我们将创建一个0矩阵，具有max_len行和d_model列。
+        ## 例如...
         ## torch.zeros(3, 2)
-        ## ...returns a matrix of 0s with 3 rows and 2 columns...
+        ## ...返回一个3行2列的0矩阵...
         ## tensor([[0., 0.],
         ##         [0., 0.],
         ##         [0., 0.]])
-
-
-        ## 创建一个存储所有位置编码的表格pe,将值全部初始化为0
-        ## 我们创建一个max_len行，d_model列的，值为0的矩阵
         pe = torch.zeros(max_len, d_model)
 
-        ## Now we create a sequence of numbers for each position that a token can have in the input (or output).
-        ## For example, if the input tokens where "I'm happy today!", then "I'm" would get the first
-        ## position, 0, "happy" would get the second position, 1, and "today!" would get the third position, 2.
-        ## NOTE: Since we are going to be doing math with these position indices to create the 
-        ## positional encoding for each one, we need them to be floats rather than ints.
+        ## 现在我们为每个token在输入中的位置创建一个序列号（或者输出中的位置）。
+        ## 例如，如果输入的tokens是"我今天很高兴！"，那么"我"会得到第一个位置0，
+        ## "今天"会得到第二个位置1，"很高兴！"会得到第三个位置2。
+        ## 注意：由于我们要对这些位置索引进行数学运算以创建每个位置的编码，
+        ##       所以我们需要它们是浮点数，而不是整数。
         ## 
-        ## NOTE: Two ways to create floats are...
+        ## 注意：创建浮点数的两种方式是...
         ##
         ## torch.arange(start=0, end=3, step=1, dtype=torch.float)
         ##
-        ## ...and...
+        ## ...和...
         ##
         ## torch.arange(start=0, end=3, step=1).float()
         ##
-        ## ...but the latter is just as clear and requires less typing.
+        ## ...但后者只是更简洁，不需要那么多输入。
         ##
-        ## Lastly, .unsqueeze(1) converts the single list of numbers that torch.arange creates into a matrix with
-        ## one row for each index, and all of the indices in a single column. So if "max_len" = 3, then we
-        ## would create a matrix with 3 rows and 1 column like this...
+        ## 最后，.unsqueeze(1)将torch.arange创建的单列数字转换成一个矩阵，每个索引一行，所有索引
+        ## 在同一列。所以如果"max_len"=3，那么我们将得到一个3行1列的矩阵：
         ##
         ## torch.arange(start=0, end=3, step=1, dtype=torch.float).unsqueeze(1)
         ##
-        ## ...returns...
+        ## ...返回...
         ##
         ## tensor([[0.],
         ##         [1.],
-        ##         [2.]])        
+        ##         [2.]])     
 
-        ## 现在创建每一个token的位置数字序列
-        ## 比如，如果输入tokens I'm happy today!,I'm作为第一个位置编码值为0,happy是第二个位置编码1,today!第三个位置编码。
-        ## 注意：因为我们将使用数学计算每一个位置编码，因为使用floats数据类型而不是int
-        ## 注意：有两种方法创建floats类型：
-        ## torch.arange(start=0, end=3, step=1, dtype=torch.float)
-        ## 以及
-        ## torch.arange(start=0, end=3, step=1).float()
-        ## 第二种更清晰，代码更简洁
 
-        ## 最后.unsqueeze(1)可以将torch.arrange生成元素增加一个维度
+
         position = torch.arange(start=0, end=max_len, step=1).float().unsqueeze(1)
 
+        
 
-        ## Here is where we start doing the math to determine the y-axis coordinates on the
-        ## sine and cosine curves.
+        ## 这里开始进行数学计算，确定正弦和余弦曲线上的y轴坐标。
         ##
-        ## The positional encoding equations used in "Attention is all you need" are...
+        ## 《Attention is all you need》中使用的位置编码公式是...
         ##
         ## PE(pos, 2i)   = sin(pos / 10000^(2i/d_model))
         ## PE(pos, 2i+1) = cos(pos / 10000^(2i/d_model))
         ##
-        ## ...and we see, within the sin() and cos() functions, we divide "pos" by some number that depends
-        ## on the index (i) and total number of PE values we want per token (d_model). 
+        ## ...在sin()和cos()函数中，我们将"pos"除以一个依赖于索引(i)和所需PE值数量(d_model)的数字。
         ##
-        ## NOTE: When the index, i, is 0 then we are calculating the y-axis coordinates on the **first pair** 
-        ##       of sine and cosine curves. When i=1, then we are calculating the y-axis coordiantes on the 
-        ##       **second pair** of sine and cosine curves. etc. etc.
+        ## 注意：当索引i=0时，我们计算的是**第一对**正弦和余弦曲线的y轴坐标。
+        ##       当i=1时，我们计算的是**第二对**正弦和余弦曲线的y轴坐标，依此类推。
         ##
-        ## Now, pretty much everyone calculates the term we use to divide "pos" by first, and they do it with
-        ## code that looks like this...
+        ## 现在，几乎所有人都首先计算我们用来除"pos"的项，它的代码通常是这样的...
         ##
         ## div_term = torch.exp(torch.arange(start=0, end=d_model, step=2).float() * -(math.log(10000.0) / d_model))
         ##
-        ## Now, at least to me, it's not obvious that div_term = 1/(10000^(2i/d_model)) for a few reasons:
+        ## 至少对我来说，div_term = 1/(10000^(2i/d_model))并不显而易见，原因有几个：
         ##
-        ##    1) div_term wraps everything in a call to torch.exp() 
-        ##    2) It uses log()
-        ##    2) The order of the terms is different 
+        ##    1) div_term 将所有内容包装在torch.exp()调用中
+        ##    2) 它使用了log()
+        ##    2) 各项的顺序不同 
         ##
-        ## The reason for these differences is, presumably, trying to prevent underflow (getting too close to 0).
-        ## So, to show that div_term = 1/(10000^(2i/d_model))...
+        ## 这些差异的原因可能是为了防止下溢（即接近0的值）。
+        ## 因此，为了展示div_term = 1/(10000^(2i/d_model))，我们可以这样操作...
         ##
-        ## 1) Swap out math.log() for torch.log() (doing this requires converting 10000.0 to a tensor, which is my
-        ##    guess for why they used math.log() instead of torch.log())...
+        ## 1) 将math.log()替换为torch.log()（这样做需要将10000.0转换为张量，这是我猜测为什么使用math.log()而不是torch.log()的原因）...
         ##
         ## torch.exp(torch.arange(start=0, end=d_model, step=2).float() * -(torch.log(torch.tensor(10000.0)) / d_model))
         ##
-        ## 2) Rearrange the terms...
+        ## 2) 重排各项...
         ##
         ## torch.exp(-1 * (torch.log(torch.tensor(10000.0)) * torch.arange(start=0, end=d_model, step=2).float() / d_model))
         ##
-        ## 3) Pull out the -1 with exp(-1 * x) = 1/exp(x)
+        ## 3) 用exp(-1 * x) = 1/exp(x)将-1提取出来
         ##
         ## 1/torch.exp(torch.log(torch.tensor(10000.0)) * torch.arange(start=0, end=d_model, step=2).float() / d_model)
         ##
-        ## 4) Use exp(a * b) = exp(a)^b to pull out the 2i/d_model term...
+        ## 4) 使用exp(a * b) = exp(a)^b将2i/d_model项提取出来...
         ##
         ## 1/torch.exp(torch.log(torch.tensor(10000.0)))^(torch.arange(start=0, end=d_model, step=2).float() / d_model)
         ##
-        ## 5) Use exp(log(x)) = x to get the original form of the denominator...
+        ## 5) 使用exp(log(x)) = x恢复分母的原始形式...
         ##
         ## 1/(torch.tensor(10000.0)^(torch.arange(start=0, end=d_model, step=2).float() / d_model))
         ##
-        ## 6) Bam.
+        ## 6) 结束。
         ## 
-        ## So, that being said, I don't think underflow is actually that big an issue. In fact, some coder at Hugging Face
-        ## also doesn't think so, and their code for positional encoding in DistilBERT (a streamlined version of BERT, which
-        ## is a transformer model)
-        ## calculates the values directly - using the form of the equation found in original Attention is all you need
-        ## manuscript. See...
+        ## 所以，考虑到这一点，我并不认为下溢问题真的那么严重。事实上，Hugging Face的某个开发者
+        ## 也不这么认为，他们在DistilBERT（BERT的简化版本，这是一个Transformer模型）中的位置编码代码
+        ## 就是直接按照《Attention is all you need》原文中的公式进行计算的。参考链接：
         ## https://github.com/huggingface/transformers/blob/455c6390938a5c737fa63e78396cedae41e4e87e/src/transformers/modeling_distilbert.py#L53
-        ## So I think we can simplify the code, but I'm also writing all these comments to show that it is equivalent to what
-        ## you'll see in the wild...
+        ## 因此，我认为我们可以简化代码，不过我还是写了这么多注释来表明这与实际中常见的做法等效。
         ##
-        ## Now let's create an index for the embedding positions to simplify the code a little more...
+        ## 现在，让我们创建一个索引来简化代码...
         embedding_index = torch.arange(start=0, end=d_model, step=2).float()
-        ## NOTE: Setting step=2 results in the same sequence numbers that we would get if we multiplied i by 2.
-        ##       So we can save ourselves a little math by just setting step=2.
+        ## 注意：设置step=2将导致与i乘以2时的相同序列号。
+        ##       因此我们可以省去一些数学计算，直接将step设为2。
 
-        ## And now, finally, let's create div_term...
+        ## 现在，终于可以创建div_term了...
         div_term = 1/torch.tensor(10000.0)**(embedding_index / d_model)
         
-        ## Now we calculate the actual positional encoding values. Remember 'pe' was initialized as a matrix of 0s
-        ## with max_len (max number of input tokens) rows and d_model (number of embedding values per token) columns.
-        pe[:, 0::2] = torch.sin(position * div_term) ## every other column, starting with the 1st, has sin() values
-        pe[:, 1::2] = torch.cos(position * div_term) ## every other column, starting with the 2nd, has cos() values
-        ## NOTE: If the notation for indexing 'pe[]' looks cryptic to you, read on...
+        ## 现在计算实际的位置信息编码值。记住，'pe'已经初始化为一个全0的矩阵，
+        ## 具有max_len（最大输入token数量）行和d_model（每个token的嵌入值数量）列。
+        pe[:, 0::2] = torch.sin(position * div_term) ## 从第1列开始的每隔一列，填充sin()值
+        pe[:, 1::2] = torch.cos(position * div_term) ## 从第2列开始的每隔一列，填充cos()值
+        ## 注意：如果索引'pe[]'看起来有点难懂，接着往下看...
         ##
-        ## First, let's look at the general indexing notation:
+        ## 首先，我们看一下通用的索引表示法：
         ##
-        ## For each row or column in matrix we can select elements in that
-        ## row or column with the following indexs...
+        ## 对于矩阵中的每一行或列，我们可以使用以下索引来选择元素...
         ##
-        ## i:j:k = select elements between i and j with stepsize = k.
+        ## i:j:k = 选择从i到j之间的元素，步长为k。
         ##
-        ## ...where...
+        ## ...其中...
         ##
-        ## i defaults to 0
-        ## j defaults to the number of elements in the row, column or whatever.
-        ## k defaults to 1
+        ## i默认为0
+        ## j默认为行列的元素数量
+        ## k默认为1
         ##
-        ## Now that we have looked at the general notation, let's look at specific
-        ## examples so that we can understand it.
+        ## 现在我们来分析一下具体例子，以帮助理解。
         ##
-        ## We'll start with: pe[:, 0::2]
+        ## 我们从：pe[:, 0::2]开始
         ##
-        ## The stuff that comes before the comma (in this case ':') refers to the rows we want to select.
-        ## The ':' before the comma means "select all rows" because we are not providing specific 
-        ## values for i, j and k and, instead, just using the default values.
+        ## 在逗号前面的部分（在这里是':'）指的是我们想选择的行。
+        ## 这里的':'意味着"选择所有行"，因为我们没有提供i、j和k的具体值，而是使用默认值。
         ##
-        ## The stuff after the comma refers to the columns we want to select.
-        ## In this case, we have '0::2', and that means we start with
-        ## the first column (column =  0) and go to the end (using the default value for j)
-        ## and we set the stepsize to 2, which means we skip every other column.
+        ## 在逗号后面的部分指的是我们想选择的列。
+        ## 在这里，我们有'0::2'，意味着从第1列（列=0）开始，直到最后，步长为2，也就是说跳过每一列。
         ##
-        ## Now to understand pe[:, 1::2]
+        ## 现在理解pe[:, 1::2]
         ##
-        ## Again, the stuff before the comma refers to the rows, and, just like before
-        ## we use default values for i,j and k, so we select all rows.
+        ## 同样，逗号前的部分指的是行，依然使用默认值选择所有行。
+        ## 在逗号后面的部分指的是列。
+        ## 这里我们从第2列（列=1）开始，直到最后，步长为2，跳过每一列。
         ##
-        ## The stuff that comes after the comma refers to the columns.
-        ## In this case, we start with the 2nd column (column = 1), and go to the end
-        ## (using the default value for 'j') and we set the stepsize to 2, which
-        ## means we skip every other column.
-        ##
-        ## NOTE: using this ':' based notation is called "indexing" and also called "slicing"
+        ## 注意：使用这种基于':'的表示法叫做“索引”或“切片”。
         
-        ## Now we "register 'pe'.
-        self.register_buffer('pe', pe) ## "register_buffer()" ensures that
-                                       ## 'pe' will be moved to wherever the model gets
-                                       ## moved to. So if the model is moved to a GPU, then,
-                                       ## even though we don't need to optimize 'pe', it will 
-                                       ## also be moved to that GPU. This, in turn, means
-                                       ## that accessing 'pe' will be relatively fast copared
-                                       ## to having a GPU have to get the data from a CPU.
+        ## 现在我们"注册'pe'。
+        self.register_buffer('pe', pe) ## "register_buffer()"确保'pe'会随模型一起移动
+                                       ## 所以如果模型移动到GPU，那么
+                                       ## 即使我们不需要优化'pe'，它也会被移动到GPU。
+                                       ## 这样，访问'pe'将比让GPU从CPU获取数据更快。
 
-    ## Because this class, PositionEncoding, inherits from nn.Module, the forward() method 
-    ## is called by default when we use a PositionEncoding() object.
-    ## In other words, after we create a PositionEncoding() object, pe = PositionEncoding(),
-    ## then pe(word_embeddings) will call forward() and so this is where 
-    ## we will add the position encoding values to the word embedding values
+    ## 由于这个类PositionEncoding继承自nn.Module，调用forward()方法
+    ## 是默认的行为。
+    ## 换句话说，在我们创建一个PositionEncoding()对象后，pe = PositionEncoding()，
+    ## 然后pe(word_embeddings)将调用forward()，因此我们将在这里
+    ## 将位置编码值加到词嵌入值上
     def forward(self, word_embeddings):
     
-        return word_embeddings + self.pe[:word_embeddings.size(0), :] ## word_embeddings.size(0) = number of embeddings
-                                                                      ## NOTE: That second ':' is optional and 
-                                                                      ## we could re-write it like this: 
+        return word_embeddings + self.pe[:word_embeddings.size(0), :] ## word_embeddings.size(0) = 嵌入的数量
+                                                                      ## 注意：第二个':'是可选的，我们
+                                                                      ## 可以将其重写为：
                                                                       ## self.pe[:word_embeddings.size(0)]
+
 ```
