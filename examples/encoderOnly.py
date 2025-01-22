@@ -7,15 +7,19 @@ import torch.nn.functional as F
 # ========== 1. 数据准备 ==========
 class DummyDataset(Dataset):
     def __init__(self, size=1000, seq_len=10, vocab_size=50):
+        # 初始化数据集，生成随机数据和标签
         self.data = torch.randint(1, vocab_size, (size, seq_len))  # 随机生成数据
         self.labels = torch.randint(0, 2, (size,))  # 修改为分类任务的标签
 
     def __getitem__(self, idx):
+        # 获取指定索引的数据和标签
         return self.data[idx], self.labels[idx]
 
     def __len__(self):
+        # 返回数据集的大小
         return len(self.data)
 
+# 创建数据集实例和数据加载器
 dataset = DummyDataset()
 data_loader = DataLoader(dataset, batch_size=32, shuffle=True)
 
@@ -23,19 +27,27 @@ data_loader = DataLoader(dataset, batch_size=32, shuffle=True)
 class EncoderOnlyTransformer(nn.Module):
     def __init__(self, vocab_size, d_model=128, nhead=4, num_layers=2, dim_feedforward=512, num_classes=2):
         super().__init__()
+        # 定义嵌入层
         self.embedding = nn.Embedding(vocab_size, d_model)
+        # 定义位置编码参数
         self.pos_encoder = nn.Parameter(torch.zeros(1, 100, d_model))
+        # self.pos_encoder =  torch.zeros(1, 100, d_model)
+
+        # 定义Transformer Encoder层
         encoder_layer = nn.TransformerEncoderLayer(d_model=d_model, nhead=nhead, 
                                                  dim_feedforward=dim_feedforward)
+        # 定义Transformer Encoder
         self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
-        self.fc_out = nn.Linear(d_model, num_classes)  # 输出层改为分类
+        # 定义输出层，用于分类
+        self.fc_out = nn.Linear(d_model, num_classes)
 
     def forward(self, src):
-        # 添加位置编码
+        # 添加位置编码到嵌入层输出
         src = self.embedding(src) + self.pos_encoder[:, :src.size(1), :]
+        # 调整张量维度以适应Transformer Encoder的输入要求
         src = src.permute(1, 0, 2)  # (seq_len, batch, feature)
         
-        # 通过encoder
+        # 通过Transformer Encoder
         output = self.transformer_encoder(src)
         
         # 使用序列的最后一个时间步的输出进行分类
